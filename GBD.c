@@ -6,6 +6,7 @@
 */
 
 #include "common.h"
+extern struct ext3_group_desc *grpDescTable;
 
 //returns 1 if group descriptor table at blkGrpNum1 and blkGrpNum2 are identical.
 //else returns 0
@@ -47,8 +48,17 @@ int compareGrpDesc(int blkGrpNum1, int blkGrpNum2, char driveName[])
     return 1;
 }
 
+int getSizeOfGrpDescTableInBlocks()
+{
+    int grpDescTblSize = blockGroupCount * BLOCK_GROUP_SIZE;
+    if(grpDescTblSize % blockSize)
+        return ((grpDescTblSize / blockSize) + 1);
+    else
+        return (grpDescTblSize / blockSize);
+}
+
 //iterate all the block groups in a group descriptor table and output its contents to an output file named "output.txt"
-void getGrpDescTable(char driveName[], int blockGroupNo)
+struct ext3_group_desc * getGrpDescTable(char driveName[], int blockGroupNo)
 {
     long long offset =0;
     FILE* output_file;
@@ -56,6 +66,9 @@ void getGrpDescTable(char driveName[], int blockGroupNo)
     int index;
     char *buff = (char *)malloc(sizeof(struct ext3_group_desc));
     struct ext3_group_desc * gdesc = (struct ext3_group_desc *)malloc(sizeof(struct ext3_group_desc));
+
+    //structure to store all block descriptor 
+    struct ext3_group_desc *gDescTable = (struct ext3_group_desc *)malloc(blockGroupCount * sizeof(struct ext3_group_desc));    
 
     //The different fields in the block group descriptor
     unsigned char block_group_descriptor[8][30] = {"Blocks bitmap block","Inodes bitmap block","Inode table block","Free blocks count","Free inodes count","Used dirs count"/*,"bg_pad","bg_reserved"*/};
@@ -99,7 +112,7 @@ void getGrpDescTable(char driveName[], int blockGroupNo)
     {
         fprintf(hex_dump, "%02x ", buffer[index]);
         byteCount++;
-        if(byteCount == 16)
+        if(byteCount == HEX_DUMP_LINE_SIZE)
         {
             fprintf(hex_dump, "\n");
             byteCount = 0;
@@ -122,6 +135,7 @@ void getGrpDescTable(char driveName[], int blockGroupNo)
         //read each group descriptor and write it to output file.
         read(fd,buff,sizeof(struct ext3_group_desc));
         memcpy((void *)gdesc,(void *)buff,sizeof(struct ext3_group_desc));
+        memcpy((void *)&gDescTable[bg_iterator], (void *)buff, sizeof(struct ext3_group_desc));
         fprintf(output_file, "%15ld|", gdesc->bg_block_bitmap);
         fprintf(output_file, "%18ld|", gdesc->bg_inode_bitmap);
         fprintf(output_file, "%20ld|", gdesc->bg_inode_table);
@@ -133,6 +147,105 @@ void getGrpDescTable(char driveName[], int blockGroupNo)
         bg_iterator++;
     }
     close(output_file);
+    return gDescTable;
+}
+
+
+void readFromInode(int inode, char dName[])
+{
+    char *buffer = (char *)malloc(DEFAULT_EXT3_INODE_SIZE);
+    struct ext3_inode *inode_tab = (struct ext3_inode *)malloc(DEFAULT_EXT3_INODE_SIZE);
+    int blockGroupNo, inodeTableIndex;
+
+    //get the block group number where the file resides
+    blockGroupNo = inode / blockSize;
+
+    //get the index of the inode table
+    inodeTableIndex = (inode % blockSize) - 1;
+
+    //read inode table starting block number from group descriptor table
+    long inodeTableBlockNum = grpDescTable[blockGroupNo].bg_inode_table;
+
+    //calculate the offset in bytes for the file seek
+    long long offset = (inodeTableBlockNum * blockSize) + (inodeTableIndex * DEFAULT_EXT3_INODE_SIZE);
+    int fd = open(dName, O_RDONLY);
+    lseek64(fd,offset,SEEK_SET);
+    read(fd, buffer, DEFAULT_EXT3_INODE_SIZE);
+    memcpy((void *)inode_tab, (void *)buffer, DEFAULT_EXT3_INODE_SIZE);
+    int fileSizeInBlocks;
+    if(inode_tab->i_size % blockSize == 0)
+        fileSizeInBlocks = inode_tab->i_size / blockSize;
+    else
+        fileSizeInBlocks = (inode_tab->i_size / blockSize) + 1;
+    
+    char *data = (char *)malloc(blockSize);
+    memset((void *)data, 0, blockSize);
+    int index = 0;
+    int fp = open(dName, O_RDONLY);
+    int blockNumber;
+
+    //direct blocks
+    if(fileSizeInBlocks <= DIRECT_BLOCKS_COUNT || 
+       fileSizeInBlocks > DIRECT_BLOCKS_COUNT)
+    {
+        blockNumber = inode_tab->i_block[index];
+        offset = blockNumber * blockSize;
+        lseek64(fp, offset, SEEK_SET);
+        while(index < 12)
+        {
+            read(fp, data, blockSize);
+            printf("%s", data);
+            index++;
+        }        
+    }
+
+    //single indirect blocks
+    if(fileSizeInBlocks > DIRECT_BLOCKS_COUNT &&
+       (fileSizeInBlocks <= SINGLE_INDIRECT_BLOCKS_COUNT ||
+       fileSizeInBlocks > SINGLE_INDIRECT_BLOCKS_COUNT))
+    {
+        blockNumber = inode_tab->i_block[index];
+        offset = blockNumber * blockSize;
+        lseek64(fp, offset, SEEK_SET);
+        memset((void *)data, 0, blockSize);
+        read(fp, data, blockSize);
+        int addr;
+        int counter = 0;
+        int maxCount = blockSize / sizeof(int);
+        while(counter < maxCount)
+        {
+            memcpy(&addr, (void *)data, sizeof(int));
+            if(addr > 0)
+            {
+                char *content = (char *)malloc(blockSize);
+                long long byteOffset = addr * blockSize;
+                lseek64(fp, byteOffset, SEEK_SET);
+                read(fp, content, blockSize);
+                printf("%s", content);
+            }
+            else
+            {
+                break;
+            }
+            data += sizeof(int);
+            counter++;
+        }
+        index++;
+    }
+
+    //second indirect blocks
+    if(fileSizeInBlocks > SINGLE_INDIRECT_BLOCKS_COUNT &&
+           (fileSizeInBlocks <= DOUBLE_INDIRECT_BLOCKS_COUNT ||
+            fileSizeInBlocks > DOUBLE_INDIRECT_BLOCKS_COUNT))
+    {
+
+    }
+
+    //triple indirect blocks
+    if(fileSizeInBlocks > DOUBLE_INDIRECT_BLOCKS_COUNT)
+    {
+
+    }
 }
 
 int main(int argc, char* argv[])
@@ -152,10 +265,9 @@ int main(int argc, char* argv[])
     }
     blockSize = getBlockSize(dName);
     blockGroupCount = getNumberofBlockGroups(dName);
-    //getGrpDescTable(dName, 0);
-    //getGrpDescTable(dName, 49);
+    grpDescTable = getGrpDescTable(dName, 1);
     
-    int i, j;
+    /*int i, j;
     for(i=0;i<blockGroupCount;++i)
     {
         if(!isPowerOf3_5_7(i))
@@ -166,7 +278,9 @@ int main(int argc, char* argv[])
                 if(isPowerOf3_5_7(j))            
                     printf("The group descriptor table at block groups %2d and %2d are identical  -  %d\n", i,j, compareGrpDesc(i, j, dName));
             }
-    }
+    }*/
+
+    readFromInode(25, dName);
 
     return 0;	
 }

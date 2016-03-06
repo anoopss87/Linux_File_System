@@ -22,10 +22,18 @@
 #define NUM_OF_INODES_IN_A_GROUP_REL_OFFSET 4
 #define MIN_BLOCK_SIZE 1024
 #define BLOCK_GROUP_DESC_SIZE 32
+#define EXT3_N_BLOCKS 15
+#define DEFAULT_EXT3_INODE_SIZE 256
+#define BLOCK_GROUP_SIZE 32
+#define HEX_DUMP_LINE_SIZE 16
+#define DIRECT_BLOCKS_COUNT 12
+#define SINGLE_INDIRECT_BLOCKS_COUNT 1024
+#define DOUBLE_INDIRECT_BLOCKS_COUNT 1024*1024
 
 //global variable so that it can be reused
 int blockSize;
 int blockGroupCount;
+struct ext3_group_desc *grpDescTable;
 
 typedef signed char _s8;
 typedef unsigned char _u8;
@@ -53,6 +61,62 @@ struct ext3_group_desc
 	_u16	bg_used_dirs_count;	/* Directories count */
 	_u16	bg_pad;
 	_u32	bg_reserved[3];
+};
+
+struct ext3_inode {
+	__le16	i_mode;		/* File mode */
+	__le16	i_uid;		/* Low 16 bits of Owner Uid */
+	__le32	i_size;		/* Size in bytes */
+	__le32	i_atime;	/* Access time */
+	__le32	i_ctime;	/* Creation time */
+	__le32	i_mtime;	/* Modification time */
+	__le32	i_dtime;	/* Deletion Time */
+	__le16	i_gid;		/* Low 16 bits of Group Id */
+	__le16	i_links_count;	/* Links count */
+	__le32	i_blocks;	/* Blocks count */
+	__le32	i_flags;	/* File flags */
+	union {
+		struct {
+			__u32  l_i_reserved1;
+		} linux1;
+		struct {
+			__u32  h_i_translator;
+		} hurd1;
+		struct {
+			__u32  m_i_reserved1;
+		} masix1;
+	} osd1;				/* OS dependent 1 */
+	__le32	i_block[EXT3_N_BLOCKS];/* Pointers to blocks */
+	__le32	i_generation;	/* File version (for NFS) */
+	__le32	i_file_acl;	/* File ACL */
+	__le32	i_dir_acl;	/* Directory ACL */
+	__le32	i_faddr;	/* Fragment address */
+	union {
+		struct {
+			__u8	l_i_frag;	/* Fragment number */
+			__u8	l_i_fsize;	/* Fragment size */
+			__u16	i_pad1;
+			__le16	l_i_uid_high;	/* these 2 fields    */
+			__le16	l_i_gid_high;	/* were reserved2[0] */
+			__u32	l_i_reserved2;
+		} linux2;
+		struct {
+			__u8	h_i_frag;	/* Fragment number */
+			__u8	h_i_fsize;	/* Fragment size */
+			__u16	h_i_mode_high;
+			__u16	h_i_uid_high;
+			__u16	h_i_gid_high;
+			__u32	h_i_author;
+		} hurd2;
+		struct {
+			__u8	m_i_frag;	/* Fragment number */
+			__u8	m_i_fsize;	/* Fragment size */
+			__u16	m_pad1;
+			__u32	m_i_reserved2[2];
+		} masix2;
+	} osd2;				/* OS dependent 2 */
+	__le16	i_extra_isize;
+	__le16	i_pad1;
 };
 
 //Function declaration
