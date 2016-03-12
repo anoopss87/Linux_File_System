@@ -1,6 +1,6 @@
 /* Digital Forensics - Spring 2016 
  * 
- * common.h - common structures and functions are declared in this file.
+ * GBD.h - structures and functions are declared in this file.
  * @author - Anoop S Somashekar
 */
 
