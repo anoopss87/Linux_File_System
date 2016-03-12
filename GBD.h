@@ -130,6 +130,7 @@ void bgdReadSingleIndirectBlocks(int blockNumber, FILE *fDataOutput, int fp, int
 void bgdReadDoubleIndirectBlocks(int blockNumber, FILE *fDataOutput, int fp, int fileSizeInBlocks, FILE *fBlockAddr);
 void bgdReadTripleIndirectBlocks(int blockNumber, FILE *fDataOutput, int fp, int fileSizeInBlocks, FILE *fBlockAddr);
 void bgdReadFromInode(int inode, char dName[]);
+char *bgdGetBlockGroupInfo(int blockGroupNum);
 
 int bgdMax(int a, int b);
 int bgdGetBlockSize(char driveName[]);
