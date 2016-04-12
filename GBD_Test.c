@@ -5,20 +5,17 @@
  * @author - Anoop S Somashekar
 */
 
-#include "GBD.h"
+#include "Group_Desc.h"
 
 int main(int argc, char* argv[])
 {
-    if(argc < 3)
+    if(argc < 2)
     {
 	    printf("Invalid argument format: Usage %s \\dev\\sdx1 inode_number\n", argv[0]);
         exit(1);
     }
     char *dName = argv[1];
     int inodeNumber = atoi(argv[2]);
-    int fileWrite = 0;
-    if(argc > 3)
-        fileWrite = 1;
     int fd = open(argv[1],O_RDONLY);
     if(fd < 0)
     {
@@ -26,9 +23,7 @@ int main(int argc, char* argv[])
         exit (2);
     }
 
-    gBlockSize = bgdGetBlockSize(dName);
-    gBlockGroupCount = bgdGetNumberofBlockGroups(dName);
-    gGrpDescTable = bgdGetGrpDescTable(dName, 0, fileWrite);
+    init(dName);
 
     /*int i, j;
     for(i=0;i<gBlockGroupCount;++i)
@@ -38,11 +33,35 @@ int main(int argc, char* argv[])
         else
             for(j=i+1;j<gBlockGroupCount;++j)
             {
-                if(bgdIsPowerOf3_5_7(j))            
-                    printf("The group descriptor table at block groups %2d and %2d are identical  -  %d\n", i,j, compareGrpDesc(i, j, dName));
+                if(bgdIsPowerOf3_5_7(j))
+                {            
+                    char *res = bgdCompareGrpDesc(i, j, dName);
+                    if(res[0] == '\0')
+                    {
+                        printf("GDT at block group %d and block group %d are identical\n", i, j);
+                    }
+                    else
+                    {
+                        printf("GDT at block group %d and block group %d are not identical\n", i, j);
+                        printf("%s\n", res);
+                    }
+                }
             }
     }*/
-    bgdReadFromInode(inodeNumber, dName);
+    unsigned char *val;
+    int k, counter=0;;
+    val = bgdReadBlockBitmap(dName, inodeNumber);
+    /*for(k=0;k<gBlockSize * BITS_IN_A_BYTE;++k)
+    {
+        counter++;
+        printf("%u ", val[k]);
+        if(counter == 30)
+        {
+            counter = 0;
+            printf("\n");
+        }
+    }*/
+    //bgdReadFromInode(inodeNumber, dName);
     free(gGrpDescTable);
     return 0;	
 }
